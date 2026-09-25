@@ -1,6 +1,7 @@
 package antifraud.servicoauditoria.util;
 
 import antifraud.servicoauditoria.document.Auditoria;
+import antifraud.servicoauditoria.dto.AuditoriaResponseDTO;
 import antifraud.servicoauditoria.dto.ResultadoAnaliseEventoDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,18 @@ public class AuditoriaMapper {
                 List.copyOf(evento.regrasDisparadas()),
                 evento.analisadoEm(),
                 LocalDateTime.now(relogio)
+        );
+    }
+
+    public AuditoriaResponseDTO paraResponse(Auditoria auditoria) {
+        return new AuditoriaResponseDTO(
+                auditoria.getId(),
+                auditoria.getTransacaoId(),
+                auditoria.getPontuacao(),
+                auditoria.getNivel(),
+                List.copyOf(auditoria.getRegrasDisparadas()),
+                auditoria.getAnalisadoEm(),
+                auditoria.getRegistradoEm()
         );
     }
 }
