@@ -32,6 +32,10 @@ Topologia de entrada:
 
 Centralize os nomes RabbitMQ em `RabbitMQConfig`. O conversor JSON deve permitir contratos locais e não depender da classe Java do produtor. Não invente exchanges, filas ou routing keys.
 
+O contrato local de entrada é `ResultadoAnaliseEventoDTO`, com `transacaoId`, `pontuacao`, `nivel`, `regrasDisparadas` e `analisadoEm`. O documento `Auditoria` é persistido na coleção `auditorias`, acrescentando `registradoEm`.
+
+A persistência é idempotente por `transacaoId`: o service detecta resultados já registrados e a coleção possui índice único nesse campo. O Consumer permanece fino e apenas delega ao `AuditoriaService`; o service aplica a idempotência e persiste, usando o `AuditoriaMapper` separado para converter o DTO local no documento.
+
 ## Padrão de código
 
 - Prefira código simples, explícito e classes pequenas com responsabilidade única.
@@ -50,23 +54,12 @@ Centralize os nomes RabbitMQ em `RabbitMQConfig`. O conversor JSON deve permitir
 - Nomeie testes como `metodo_cenario_resultado`, use `@DisplayName` em português e Arrange/Act/Assert quando ajudar a leitura.
 - Testes unitários são executados pelo Surefire.
 - Integrações usam Testcontainers, têm sufixo `*IT` e são executadas pelo Failsafe durante `verify`.
-- Integrações futuras devem usar MongoDB e RabbitMQ reais via Testcontainers e validar contratos e persistência, não apenas chamadas internas.
+- Integrações usam MongoDB e RabbitMQ reais via Testcontainers e validam publicação, desserialização, consumo, persistência e idempotência, não apenas chamadas internas.
 - Não crie `contextLoads` que dependa de MongoDB ou RabbitMQ locais.
 - O comando completo é `mvn verify`; unidades isoladas usam `mvn test`. Informe qualquer validação não executada.
 - Não remova testes para fazer o build passar.
 
 ## Próximas fases
-
-### `feature/registro-auditoria`
-
-- DTO local do evento;
-- Document;
-- Repository;
-- Mapper;
-- Consumer;
-- Service;
-- persistência;
-- testes unitários e de integração.
 
 ### `feature/api-consulta`
 
