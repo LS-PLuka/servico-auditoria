@@ -6,9 +6,9 @@
 ![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=flat-square)
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=flat-square)
 
-Microsserviço de auditoria do **antifraud-system**. Será responsável por consumir os resultados produzidos pelo `motor-risco` e persistir o histórico das análises no MongoDB.
+Microsserviço de auditoria do **antifraud-system**. Consome os resultados produzidos pelo `motor-risco` e persiste o histórico das análises no MongoDB.
 
-> Status: em desenvolvimento. Nesta fase, somente a estrutura inicial, as conexões externalizáveis e a topologia RabbitMQ estão preparadas.
+> Status: fluxo principal de registro de auditoria implementado. A API de consulta e a containerização pertencem às próximas fases.
 
 ## Fluxo
 
@@ -20,7 +20,13 @@ routing key: risco.resultado
     ↓
 risco.resultados
     ↓
-servico-auditoria
+ResultadoAnaliseConsumer
+    ↓
+AuditoriaService
+    ↓
+AuditoriaMapper
+    ↓
+AuditoriaRepository
     ↓
 MongoDB
 ```
@@ -34,9 +40,9 @@ O serviço não calcula risco, executa regras antifraude, altera score, acessa P
 | Java | 21 |
 | Spring Boot | 3.5.14 |
 | Spring AMQP | Integração com RabbitMQ |
-| Spring Data MongoDB | Persistência futura do histórico |
+| Spring Data MongoDB | Persistência do histórico |
 | JUnit 5 e Mockito | Testes unitários |
-| Testcontainers | Integrações futuras com MongoDB e RabbitMQ |
+| Testcontainers | Integração real com MongoDB 7 e RabbitMQ 3.13 |
 | Maven Surefire/Failsafe | Separação entre testes unitários e de integração |
 
 ## Configuração
@@ -58,11 +64,41 @@ O serviço não calcula risco, executa regras antifraude, altera score, acessa P
 | Routing key | `risco.resultado` | — |
 | Fila | `risco.resultados` | durável |
 
-A topologia e o conversor JSON já estão declarados. O Consumer ainda não faz parte desta fase.
+A topologia e o conversor JSON usam o tipo inferido pelo método do listener, permitindo que o evento seja desserializado no contrato local sem dependência da classe Java do produtor.
+
+## Contrato consumido
+
+O `ResultadoAnaliseEventoDTO` é um `record` local com o seguinte formato:
+
+```json
+{
+  "transacaoId": "7f3e4c2a-1b5d-4e8f-9a2c-3d6b7e1f4a8c",
+  "pontuacao": 155,
+  "nivel": "BLOQUEADA",
+  "regrasDisparadas": ["VALOR_ALTO", "CONTA_NOVA"],
+  "analisadoEm": "2026-09-24T10:30:00"
+}
+```
+
+Os níveis aceitos são `APROVADA`, `SINALIZADA` e `BLOQUEADA`. O serviço registra a decisão recebida sem recalcular score, reclassificar o nível ou interpretar regras.
+
+## Persistência e idempotência
+
+Cada resultado gera um documento na coleção `auditorias` com:
+
+- `id`;
+- `transacaoId`;
+- `pontuacao`;
+- `nivel`;
+- `regrasDisparadas`;
+- `analisadoEm`, recebido do `motor-risco`;
+- `registradoEm`, definido no momento do registro.
+
+Antes de persistir, o serviço consulta a existência de uma auditoria pela `transacaoId`. Repetições são ignoradas, e um índice único em `transacaoId` garante a unicidade também em entregas concorrentes.
 
 ## Testes e CI
 
-Testes unitários são executados pelo Maven Surefire. Testes de integração futuros devem usar o sufixo `*IT` e serão executados pelo Maven Failsafe durante `verify`.
+Os testes unitários do mapper, service e consumer são executados pelo Maven Surefire. O teste `RegistroAuditoriaIT`, executado pelo Failsafe, sobe RabbitMQ 3.13 e MongoDB 7 com Testcontainers, publica o evento na exchange real e valida consumo, desserialização, persistência e idempotência.
 
 ```bash
 ./mvnw test
@@ -83,11 +119,26 @@ A CI executa `mvn -B verify` em pushes e pull requests para `develop` e `main`.
 ```text
 src/main/java/antifraud/servicoauditoria/
 ├── config/
-│   └── RabbitMQConfig.java
+│   ├── RabbitMQConfig.java
+│   └── RelogioConfig.java
+├── consumer/
+│   └── ResultadoAnaliseConsumer.java
+├── document/
+│   └── Auditoria.java
+├── dto/
+│   └── ResultadoAnaliseEventoDTO.java
+├── enums/
+│   └── NivelRisco.java
+├── repository/
+│   └── AuditoriaRepository.java
+├── service/
+│   └── AuditoriaService.java
+├── util/
+│   └── AuditoriaMapper.java
 └── ServicoAuditoriaApplication.java
 ```
 
-Os pacotes `consumer`, `dto`, `document`, `repository` e `service` serão criados conforme suas implementações forem adicionadas. Não existem nesta fase Consumer, persistência, API de consulta ou containerização.
+Não existem nesta fase API REST, Swagger ou containerização.
 
 ## Parte de um sistema maior
 
