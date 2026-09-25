@@ -25,7 +25,6 @@ Este serviço **não calcula risco, não executa regras antifraude e não altera
 - [Contrato de erro](#contrato-de-erro)
 - [Decisões de arquitetura e trade-offs](#decisões-de-arquitetura-e-trade-offs)
 - [Testes](#testes)
-- [Limitações conhecidas](#limitações-conhecidas)
 - [Stack](#stack)
 - [Configuração](#configuração)
 - [Containerização](#containerização)
