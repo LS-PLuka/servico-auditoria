@@ -22,7 +22,8 @@ Fluxo esperado:
 - DTOs imutáveis devem ser `record` quando adequado.
 - Modelos persistidos no MongoDB pertencem ao pacote `document`, nunca `entity`.
 - Use a auto-configuração do Spring Boot para MongoDB enquanto não houver necessidade concreta de configuração customizada.
-- Não adicione Web, Security, JWT, JPA, PostgreSQL, Redis, Kafka ou WebFlux sem requisito da fase correspondente.
+- A API REST é somente leitura; auditorias continuam sendo criadas exclusivamente pelo consumo de eventos.
+- Não adicione Security, JWT, JPA, PostgreSQL, Redis, Kafka ou WebFlux sem requisito da fase correspondente.
 
 Topologia de entrada:
 
@@ -35,6 +36,13 @@ Centralize os nomes RabbitMQ em `RabbitMQConfig`. O conversor JSON deve permitir
 O contrato local de entrada é `ResultadoAnaliseEventoDTO`, com `transacaoId`, `pontuacao`, `nivel`, `regrasDisparadas` e `analisadoEm`. O documento `Auditoria` é persistido na coleção `auditorias`, acrescentando `registradoEm`.
 
 A persistência é idempotente por `transacaoId`: o service detecta resultados já registrados e a coleção possui índice único nesse campo. O Consumer permanece fino e apenas delega ao `AuditoriaService`; o service aplica a idempotência e persiste, usando o `AuditoriaMapper` separado para converter o DTO local no documento.
+
+Consultas REST disponíveis:
+
+- `GET /auditorias/transacao/{transacaoId}`;
+- `GET /auditorias?pagina=0`, com 10 itens por página e ordenação `registradoEm DESC`.
+
+Controllers permanecem finos, documentos MongoDB não são expostos diretamente e respostas usam DTOs próprios. Erros HTTP são tratados centralmente. A API é documentada com OpenAPI/Swagger e não possui autenticação nesta fase. Não crie endpoints REST de escrita para auditorias.
 
 ## Padrão de código
 
@@ -60,12 +68,6 @@ A persistência é idempotente por `transacaoId`: o service detecta resultados j
 - Não remova testes para fazer o build passar.
 
 ## Próximas fases
-
-### `feature/api-consulta`
-
-- endpoints de consulta;
-- paginação;
-- Swagger/OpenAPI.
 
 ### `feature/containerizacao`
 
