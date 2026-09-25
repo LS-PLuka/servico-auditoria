@@ -1,6 +1,7 @@
 package antifraud.servicoauditoria.util;
 
 import antifraud.servicoauditoria.document.Auditoria;
+import antifraud.servicoauditoria.dto.AuditoriaResponseDTO;
 import antifraud.servicoauditoria.dto.ResultadoAnaliseEventoDTO;
 import antifraud.servicoauditoria.enums.NivelRisco;
 import org.junit.jupiter.api.DisplayName;
@@ -38,5 +39,31 @@ class AuditoriaMapperTest {
         assertThat(auditoria.getRegrasDisparadas()).containsExactlyElementsOf(regras);
         assertThat(auditoria.getAnalisadoEm()).isEqualTo(analisadoEm);
         assertThat(auditoria.getRegistradoEm()).isEqualTo(LocalDateTime.of(2026, 9, 24, 14, 0));
+    }
+
+    @Test
+    @DisplayName("Deve copiar todos os campos persistidos para o DTO de resposta")
+    void paraResponse_auditoriaValida_copiaTodosOsCampos() {
+        AuditoriaMapper mapper = new AuditoriaMapper(Clock.systemUTC());
+        UUID transacaoId = UUID.randomUUID();
+        Auditoria auditoria = new Auditoria(
+                "auditoria-1",
+                transacaoId,
+                155,
+                NivelRisco.BLOQUEADA,
+                List.of("VALOR_ALTO"),
+                LocalDateTime.of(2026, 9, 24, 10, 30),
+                LocalDateTime.of(2026, 9, 24, 10, 31)
+        );
+
+        AuditoriaResponseDTO response = mapper.paraResponse(auditoria);
+
+        assertThat(response.id()).isEqualTo("auditoria-1");
+        assertThat(response.transacaoId()).isEqualTo(transacaoId);
+        assertThat(response.pontuacao()).isEqualTo(155);
+        assertThat(response.nivel()).isEqualTo(NivelRisco.BLOQUEADA);
+        assertThat(response.regrasDisparadas()).containsExactly("VALOR_ALTO");
+        assertThat(response.analisadoEm()).isEqualTo(LocalDateTime.of(2026, 9, 24, 10, 30));
+        assertThat(response.registradoEm()).isEqualTo(LocalDateTime.of(2026, 9, 24, 10, 31));
     }
 }

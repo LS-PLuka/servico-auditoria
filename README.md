@@ -6,9 +6,9 @@
 ![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=flat-square)
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=flat-square)
 
-Microsserviço de auditoria do **antifraud-system**. Consome os resultados produzidos pelo `motor-risco` e persiste o histórico das análises no MongoDB.
+Microsserviço de auditoria do **antifraud-system**. Consome os resultados produzidos pelo `motor-risco`, persiste o histórico das análises no MongoDB e disponibiliza uma API REST somente leitura.
 
-> Status: fluxo principal de registro de auditoria implementado. A API de consulta e a containerização pertencem às próximas fases.
+> Status: fluxo de registro e API de consulta implementados. A containerização pertence à próxima fase.
 
 ## Fluxo
 
@@ -31,7 +31,13 @@ AuditoriaRepository
 MongoDB
 ```
 
-O serviço não calcula risco, executa regras antifraude, altera score, acessa PostgreSQL ou responde ao `motor-risco`. A integração interna é assíncrona e os microsserviços mantêm contratos Java independentes.
+Consultas seguem um fluxo separado e somente de leitura:
+
+```text
+cliente HTTP -> AuditoriaController -> AuditoriaService -> AuditoriaRepository -> MongoDB
+```
+
+O serviço não calcula risco, executa regras antifraude, altera score, acessa PostgreSQL ou responde ao `motor-risco`. A API não cria, altera ou exclui auditorias; novos registros continuam sendo produzidos exclusivamente pelo fluxo assíncrono.
 
 ## Stack inicial
 
@@ -41,6 +47,8 @@ O serviço não calcula risco, executa regras antifraude, altera score, acessa P
 | Spring Boot | 3.5.14 |
 | Spring AMQP | Integração com RabbitMQ |
 | Spring Data MongoDB | Persistência do histórico |
+| Spring Web | API REST de consulta |
+| SpringDoc OpenAPI | 2.8.16 |
 | JUnit 5 e Mockito | Testes unitários |
 | Testcontainers | Integração real com MongoDB 7 e RabbitMQ 3.13 |
 | Maven Surefire/Failsafe | Separação entre testes unitários e de integração |
@@ -96,9 +104,53 @@ Cada resultado gera um documento na coleção `auditorias` com:
 
 Antes de persistir, o serviço consulta a existência de uma auditoria pela `transacaoId`. Repetições são ignoradas, e um índice único em `transacaoId` garante a unicidade também em entregas concorrentes.
 
+## API REST de consulta
+
+| Método | Endpoint | Descrição |
+|---|---|---|
+| `GET` | `/auditorias/transacao/{transacaoId}` | Busca a auditoria de uma transação; retorna `404` quando inexistente |
+| `GET` | `/auditorias?pagina=0` | Lista o histórico paginado |
+
+A listagem usa páginas base zero, tamanho fixo de 10 itens e ordenação por `registradoEm DESC`. Uma página negativa retorna `400`. O documento MongoDB não é exposto diretamente; a API retorna `AuditoriaResponseDTO`.
+
+Exemplo de consulta individual:
+
+```json
+{
+  "id": "68d52f78d2929559786d5af1",
+  "transacaoId": "7f3e4c2a-1b5d-4e8f-9a2c-3d6b7e1f4a8c",
+  "pontuacao": 155,
+  "nivel": "BLOQUEADA",
+  "regrasDisparadas": ["VALOR_ALTO", "CONTA_NOVA"],
+  "analisadoEm": "2026-09-24T10:30:00",
+  "registradoEm": "2026-09-24T10:30:01"
+}
+```
+
+Exemplo de página:
+
+```json
+{
+  "conteudo": [],
+  "paginaAtual": 0,
+  "totalPaginas": 3,
+  "totalItens": 27,
+  "tamanhoPagina": 10
+}
+```
+
+Erros possuem `status`, `erro` e `mensagem`, sem exposição de stack trace.
+
+## OpenAPI e Swagger
+
+- Swagger UI: `http://localhost:8082/swagger-ui.html`
+- OpenAPI JSON: `http://localhost:8082/v3/api-docs`
+
+A API não possui autenticação nesta fase.
+
 ## Testes e CI
 
-Os testes unitários do mapper, service e consumer são executados pelo Maven Surefire. O teste `RegistroAuditoriaIT`, executado pelo Failsafe, sobe RabbitMQ 3.13 e MongoDB 7 com Testcontainers, publica o evento na exchange real e valida consumo, desserialização, persistência e idempotência.
+Os testes unitários do mapper, service e consumer, além dos testes HTTP com MockMvc, são executados pelo Maven Surefire. Os testes de controller não dependem de MongoDB ou RabbitMQ. O teste `RegistroAuditoriaIT`, executado pelo Failsafe, sobe RabbitMQ 3.13 e MongoDB 7 com Testcontainers, publica o evento na exchange real e valida consumo, desserialização, persistência e idempotência.
 
 ```bash
 ./mvnw test
@@ -120,15 +172,25 @@ A CI executa `mvn -B verify` em pushes e pull requests para `develop` e `main`.
 src/main/java/antifraud/servicoauditoria/
 ├── config/
 │   ├── RabbitMQConfig.java
-│   └── RelogioConfig.java
+│   ├── RelogioConfig.java
+│   └── OpenApiConfig.java
 ├── consumer/
 │   └── ResultadoAnaliseConsumer.java
+├── controller/
+│   └── AuditoriaController.java
 ├── document/
 │   └── Auditoria.java
 ├── dto/
+│   ├── AuditoriaResponseDTO.java
+│   ├── ErroResponseDTO.java
+│   ├── PaginaResponseDTO.java
 │   └── ResultadoAnaliseEventoDTO.java
 ├── enums/
 │   └── NivelRisco.java
+├── exception/
+│   ├── AuditoriaNaoEncontradaException.java
+│   ├── GlobalExceptionHandler.java
+│   └── PaginaInvalidaException.java
 ├── repository/
 │   └── AuditoriaRepository.java
 ├── service/
@@ -138,7 +200,12 @@ src/main/java/antifraud/servicoauditoria/
 └── ServicoAuditoriaApplication.java
 ```
 
-Não existem nesta fase API REST, Swagger ou containerização.
+## Limitações conhecidas
+
+- não há autenticação ou autorização;
+- o tamanho da página é fixo em 10;
+- a API não possui filtros além de `transacaoId`;
+- a containerização pertence à próxima fase.
 
 ## Parte de um sistema maior
 
