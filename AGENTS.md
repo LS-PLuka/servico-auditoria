@@ -67,12 +67,12 @@ Controllers permanecem finos, documentos MongoDB não são expostos diretamente 
 - O comando completo é `mvn verify`; unidades isoladas usam `mvn test`. Informe qualquer validação não executada.
 - Não remova testes para fazer o build passar.
 
-## Próximas fases
+## Containerização
 
-### `feature/containerizacao`
+- Use Dockerfile multi-stage com Maven 3.9 e JDK 21 no build e somente JRE 21 no runtime.
+- A aplicação expõe a porta `8082`, configurável por `SERVER_PORT`.
+- O runtime depende de MongoDB e RabbitMQ externos, configurados por `MONGODB_URI`, `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME` e `RABBITMQ_PASSWORD`.
+- Não crie Docker Compose neste repositório. A orquestração dos bancos, broker e microsserviços pertence ao `antifraud-system`.
+- O build da imagem não executa testes; a CI permanece responsável por executar `mvn -B verify`.
 
-- Dockerfile;
-- `.dockerignore`;
-- adequação final do README.
-
-Não antecipe esses itens sem solicitação. Não execute commits, crie ou remova branches, faça merge, rebase, push ou qualquer outra operação que altere o histórico Git.
+Não execute commits, crie ou remova branches, faça merge, rebase, push ou qualquer outra operação que altere o histórico Git.
